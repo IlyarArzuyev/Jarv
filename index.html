@@ -1,132 +1,158 @@
 <!DOCTYPE html>
 <html lang="ru">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><title>JARVIS Debug</title><style>
-html,body{margin:0;padding:0;height:100%;background:black;color:#0ff;font-family:sans-serif;user-select:none;overflow:hidden}
-.center{display:flex;justify-content:center;align-items:center;height:100%}
-#voiceBtn{width:140px;height:140px;background:#00ffff;border-radius:50%;border:none;cursor:pointer;opacity:0.8}
-#voiceBtn.active{box-shadow:0 0 50px #00ffff}
-#status{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(0,255,255,0.1);padding:8px 16px;border-radius:8px;text-align:center}
-</style></head>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>JARVIS Assistant</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; background: black; color: #00ffff;
+      height: 100%; display: flex; justify-content: center; align-items: center;
+      font-family: 'Segoe UI', sans-serif; user-select: none; overflow: hidden;
+    }
+    #voiceBtn {
+      width: 160px; height: 160px; border-radius: 50%;
+      background: radial-gradient(circle, #00ffff33, #001f1f);
+      border: 2px solid #00ffffaa;
+      box-shadow: 0 0 25px #00ffff;
+      transition: 0.3s;
+    }
+    #voiceBtn.active {
+      box-shadow: 0 0 40px #00ffff, inset 0 0 30px #00ffff;
+      transform: scale(1.05);
+    }
+    #status {
+      position: absolute; bottom: 20px; text-align: center; font-size: 16px;
+      background: rgba(0,255,255,0.1); border: 1px solid #00ffff44;
+      border-radius: 8px; padding: 8px 16px; backdrop-filter: blur(5px);
+      text-shadow: 0 0 5px #00ffff;
+    }
+  </style>
+</head>
 <body>
+  <button id="voiceBtn"></button>
+  <div id="status">🌀 Инициализация JARVIS...</div>
 
-<div class="center">
-  <button id="voiceBtn">🎙 JARVIS</button>
-</div>
-<div id="status">Инициализация...</div>
+  <script>
+    const voiceBtn = document.getElementById('voiceBtn');
+    const status = document.getElementById('status');
 
-<script>
-const voiceBtn = document.getElementById("voiceBtn");
-const status = document.getElementById("status");
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SpeechRecognition();
+    rec.lang = 'ru-RU'; rec.continuous = false; rec.interimResults = false;
 
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-if(!SR){ status.textContent = "❌ SpeechRecognition не поддерживается"; throw new Error("No SR"); }
+    const part1 = "sk-ant-api03-1uqemFV5tdYVeN53GAMnJzutPCblJ73wTR0-";
+    const part2 = "16Y_2wQKOP4gBKT16tYhoRcMfuZEbjwhe0k6SfDaruxaogc1Dg-LB31uQAA";
+    const apiKey = part1 + part2;
 
-const rec = new SR();
-rec.lang = 'ru-RU'; rec.continuous = false; rec.interimResults = false;
+    let isListening = false;
+    let lastTranscript = "";
+    let silenceTimeout = null;
 
-let listening = false, lastText = "", tID = null;
-const part1 = "sk-ant-";
-const part2 = "api03-1uqemFV5tdYVeN53GAMnJzutPCblJ73wTR0-16Y_2wQKOP4gBKT16tYhoRcMfuZEbjwhe0k6SfDaruxaogc1Dg-LB31uQAA";
-const apiKey = part1 + part2;
-
-function logErr(msg, e){
-  console.error(msg, e);
-  status.textContent = `❗ ${msg}: ${e.message||e}`;
-}
-
-function speak(text, cb){
-  status.textContent = `🗣 ${text}`;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "ru-RU"; u.pitch = 0.8; u.rate = 1.05;
-  u.onend = ()=>cb?.();
-  speechSynthesis.speak(u);
-}
-
-async function askClaude(prompt){
-  try {
-    status.textContent = "🤖 Отправка запрос к Claude...";
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "claude-3-haiku-20240307",
-        max_tokens: 100,
-        messages: [{ role: "user", content: prompt }]
-      })
-    });
-    if(!res.ok){
-      const text = await res.text();
-      throw new Error(`HTTP ${res.status}: ${text}`);
+    function speak(text, callback) {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "ru-RU";
+      u.pitch = 0.8;
+      u.rate = 1.05;
+      u.volume = 1;
+      if (callback) u.onend = callback;
+      speechSynthesis.speak(u);
     }
-    const data = await res.json();
-    const reply = data.content?.[0]?.text || "Нет ответа";
-    speak(reply);
-  } catch(e) {
-    logErr("Ошибка Claude", e);
-  }
-}
 
-rec.onresult = e => {
-  lastText = e.results[0][0].transcript.trim().toLowerCase();
-  status.textContent = `🎙 Распознано: "${lastText}"`;
-  if(tID) clearTimeout(tID);
-  tID = setTimeout(()=>{
-    if(!checkApps(lastText)) askClaude(lastText);
-    lastText = "";
-    if(listening) rec.start();
-  },2000);
-};
-rec.onend = ()=>{ if(listening && !lastText){ rec.start(); status.textContent="🌀 Перезапуск слушания"; } };
-rec.onerror = e=>logErr("Ошибка SR", e);
-
-function checkApps(t){
-  const map = {
-    'телеграм': 'tg://',
-    'ватсап': 'whatsapp://',
-    'ютуб': 'youtube://',
-    'инстаграм': 'instagram://',
-    'тик ток': 'snssdk1128://',
-    'каспи': 'kaspi://'
-  };
-  for(let k in map){
-    if(t.includes(k)){
-      status.textContent = `🔗 Открываю ${k}`;
-      speak(`Открываю ${k}`);
-      window.location.href = map[k];
-      return true;
+    async function askClaude(prompt) {
+      try {
+        status.textContent = "🤖 Запрос к Claude...";
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: "claude-3-haiku-20240307",
+            max_tokens: 100,
+            messages: [{ role: "user", content: prompt }]
+          })
+        });
+        const data = await res.json();
+        const reply = data?.content?.[0]?.text || "Ответ не получен.";
+        status.textContent = "✅ Ответ получен";
+        speak(reply);
+      } catch (e) {
+        status.textContent = "⚠️ Ошибка запроса: " + e.message;
+        console.error("Claude error:", e);
+        speak("Ошибка при обращении к ИИ");
+      }
     }
-  }
-  return false;
-}
 
-function start(){
-  listening = true;
-  rec.start();
-  voiceBtn.classList.add("active");
-  status.textContent = "🎤 Слушаю...";
-}
-function stop(){
-  listening = false;
-  rec.stop();
-  voiceBtn.classList.remove("active");
-  status.textContent = "🛑 Остановлено";
-}
+    const appURIs = {
+      'телеграм': 'tg://',
+      'ватсап': 'whatsapp://',
+      'ютуб': 'youtube://',
+      'инстаграм': 'instagram://',
+      'тик ток': 'snssdk1128://',
+      'каспи': 'kaspi://'
+    };
 
-voiceBtn.onclick = ()=>{
-  if(!listening){
-    speak("Активирую режим", start);
-  } else {
-    stop();
-  }
-};
+    function checkApps(text) {
+      for (let key in appURIs) {
+        if (text.includes(key)) {
+          window.location.href = appURIs[key];
+          speak(`Открываю ${key}`);
+          return true;
+        }
+      }
+      return false;
+    }
 
-// Автозапуск
-status.textContent = "Готово.";
-</script>
+    rec.onresult = e => {
+      lastTranscript = e.results[0][0].transcript.trim().toLowerCase();
+      status.textContent = `🎧 Вы сказали: "${lastTranscript}"`;
 
+      if (silenceTimeout) clearTimeout(silenceTimeout);
+      silenceTimeout = setTimeout(() => {
+        if (!checkApps(lastTranscript)) askClaude(lastTranscript);
+        lastTranscript = "";
+        if (isListening) rec.start();
+      }, 2000);
+    };
+
+    rec.onend = () => {
+      if (isListening && !lastTranscript) rec.start();
+    };
+
+    rec.onerror = e => {
+      status.textContent = "⚠️ Ошибка микрофона: " + e.error;
+    };
+
+    function startListening() {
+      isListening = true;
+      rec.start();
+      voiceBtn.classList.add("active");
+      status.textContent = "🎙️ Слушаю...";
+    }
+
+    function stopListening() {
+      isListening = false;
+      rec.stop();
+      voiceBtn.classList.remove("active");
+      status.textContent = "🔇 Остановлено";
+    }
+
+    voiceBtn.onclick = () => {
+      if (!isListening) {
+        speak("Активация голосового режима", startListening);
+      } else {
+        stopListening();
+        speak("Выключаю слушание");
+      }
+    };
+
+    // ⏱ Автозапуск через 3 секунды
+    setTimeout(() => {
+      speak("К вашим услугам, сэр", startListening);
+    }, 3000);
+  </script>
 </body>
 </html>
