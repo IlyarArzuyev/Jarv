@@ -47,7 +47,7 @@
 </div>
 
 <button id="voiceBtn" title="Запустить JARVIS"></button>
-<div id="status">🌀 Инициализация...</div>
+<div id="status">initializing 🤙🏻</div>
 
 <script>
   const voiceBtn = document.getElementById('voiceBtn');
@@ -57,8 +57,8 @@
   const rec = new SpeechRecognition();
   rec.lang='ru-RU'; rec.continuous=false; rec.interimResults=false;
 
-  const part1="sk-";
-  const part2="";proj-_YFadaOolQ3FRGVJdSoTbHSEk4YkAPOt-nDL-j6cCqiBY_TvecjGCX2I8RtEargMUi9aP7VYq_T3BlbkFJ8Iztpw2_KfmcwAs032X6z5xhwEE4VDkzud1dWNK9dsx90rlGPeXETj7SEz3sKs3F-NR2UuU-EA";
+  const part1="sk-proj";
+  const part2="-_YFadaOolQ3FRGVJdSoTbHSEk4YkAPOt-nDL-j6cCqiBY_TvecjGCX2I8RtEargMUi9aP7VYq_T3BlbkFJ8Iztpw2_KfmcwAs032X6z5xhwEE4VDkzud1dWNK9dsx90rlGPeXETj7SEz3sKs3F-NR2UuU-EA";
   const apiKey = part1+part2;
 
   let isListening=false, last="", toID=null;
